@@ -2,28 +2,14 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/analyze.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "50mb",
-        "runtime": "python3.12"
-      }
+      "src": "api/rag.py",
+      "use": "@vercel/python"
     }
   ],
   "routes": [
     {
-      "src": "/api/analyze",
-      "methods": ["POST"],
-      "dest": "api/analyze.py"
-    },
-    {
-      "src": "/api/analyze/",
-      "methods": ["POST"],
-      "dest": "api/analyze.py"
-    },
-    {
-      "src": "/api/(.*)",
-      "dest": "api/analyze.py"
+      "src": "/api/rag(.*)",
+      "dest": "/api/rag.py"
     }
   ]
 }
