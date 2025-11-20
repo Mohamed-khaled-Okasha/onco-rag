@@ -1,10 +1,12 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS  # التعديل الجديد هنا
 import requests
 import json
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
 app = Flask(__name__)
+CORS(app, resources={r"/api/*": {"origins": "*"}})  # يسمح لأي origin يوصل للـ /api/*
 
 # --- DeepSeek Config (من الكود الأصلي) ---
 API_URL = "https://api-ap-southeast-1.modelarts-maas.com/v1/chat/completions"
@@ -36,9 +38,29 @@ def deepseek_chat(prompt, system_prompt=None, max_tokens=512, temperature=0.3):
     return data["choices"][0]["message"]["content"].strip()
 
 # --- SYMPTOMS و embeddings (من الكود الأصلي) ---
-SYMPTOMS = [  # قائمة الأعراض هنا زي ما في الكود
+SYMPTOMS = [
     {"key": "abdominal_pain", "text": "ألم في البطن"},
-    # ... باقي القائمة
+    {"key": "headache", "text": "صداع"},
+    {"key": "nausea", "text": "غثيان"},
+    {"key": "dry_mouth", "text": "جفاف الفم"},
+    {"key": "fever", "text": "حمى"},
+    {"key": "cough", "text": "سعال"},
+    {"key": "fatigue", "text": "إرهاق"},
+    {"key": "dizziness", "text": "دوخة"},
+    {"key": "Voice quality changes", "text": "تغيرات في جودة الصوت"},
+    {"key": "Hoarseness", "text": "بحة الصوت"},
+    {"key": "Taste changes ", "text": "تغير الطعم"},
+    {"key": " Decreased appetite ", "text": "انخفاض الشهية"},
+    {"key": "Vomiting", "text": "تقيؤ"},
+    {"key": "Heartburn", "text": "حرقة صدر"},
+    {"key": "Gas", "text": "الغازات"},
+    {"key": "Bloating", "text": "الانتفاخ"},
+    {"key": "Hiccups", "text": "زغطة"},
+    {"key": "Constipation", "text": "امساك"},
+    {"key": "Diarrhea", "text": "اسهال"},
+    {"key": "Fecal incontinence", "text": "سلس برازي"},
+    {"key": "Shortness of breath", "text": "ضيق تنفس"},
+    # أضف أي أعراض تانية لو ناقصة من الكود الأصلي
 ]
 
 model = SentenceTransformer('sentence-transformers/distiluse-base-multilingual-cased-v2')
@@ -65,6 +87,21 @@ def detect_symptoms_embedding(user_text, top_k=3):
     return detected
 
 # --- SYMPTOM_QUESTIONS (من الكود الأصلي) ---
+SYMPTOM_QUESTIONS = {
+    "dry_mouth": [
+        {
+            "question": "في الأيام السبعة الماضية، ما شدة جفاف الفم؟",
+            "options": ["Ο لا أبدا", "Ο قليل", "Ο متوسط", "Ο شديد", "Ο شديد جدًا"]
+        }
+    ],
+    "difficulty_swallowing": [
+        {
+            "question": "في الأيام السبعة الماضية، ما شدة صعوبة البلع؟",
+            "options": ["Ο لا أبدا", "Ο قليل", "Ο متوسط", "Ο شديد", "Ο شديد جدًا"]
+        }
+    ],
+    # ... باقي SYMPTOM_QUESTIONS زي ما في الكود الأصلي، أضفها كاملة لو ناقصة
+}
 
 # --- API Endpoint ---
 @app.route('/api/rag', methods=['GET', 'POST'])
