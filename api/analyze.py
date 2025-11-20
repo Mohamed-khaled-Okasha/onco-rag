@@ -1,110 +1,129 @@
-# api/analyze.py
-import os
-import re
-import numpy as np
+# -*- coding: utf-8 -*-
 import requests
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+import json
+import numpy as np
 from sentence_transformers import SentenceTransformer
-from mangum import Mangum
 
-app = FastAPI(title="Onco-RAG API")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+# ===============================
+# 1) CONFIG – DeepSeek API
+# ===============================
 API_URL = "https://api-ap-southeast-1.modelarts-maas.com/v1/chat/completions"
-API_KEY = os.getenv("DEEPSEEK_API_KEY")
+API_KEY = "YOUR_API_KEY"
 
 headers = {
     "Content-Type": "application/json",
     "Authorization": f"Bearer {API_KEY}",
 }
 
-print("جاري تحميل نموذج الـ embeddings...")
-model = SentenceTransformer('sentence-transformers/distiluse-base-multilingual-cased-v2')
+def deepseek(prompt, system=None, temp=0.3):
+    msgs = []
+    if system:
+        msgs.append({"role": "system", "content": system})
+    msgs.append({"role": "user", "content": prompt})
+    
+    payload = {
+        "model": "deepseek-v3.1",
+        "messages": msgs,
+        "temperature": temp,
+        "max_tokens": 600
+    }
 
+    response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
+    data = response.json()
+
+    return data["choices"][0]["message"]["content"].strip()
+
+
+# ===============================
+# 2) Symptoms dataset
+# ===============================
 SYMPTOMS = [
-    {"key": "abdominal_pain", "text": "ألم في البطن"}, {"key": "headache", "text": "صداع"},
-    {"key": "nausea", "text": "غثيان"}, {"key": "dry_mouth", "text": "جفاف الفم"},
-    {"key": "fever", "text": "حمى"}, {"key": "cough", "text": "سعال"},
-    {"key": "fatigue", "text": "إرهاق"}, {"key": "dizziness", "text": "دوخة"},
-    {"key": "voice_changes", "text": "تغيرات في جودة الصوت"}, {"key": "hoarseness", "text": "بحة الصوت"},
-    {"key": "taste_changes", "text": "تغير الطعم"}, {"key": "low_appetite", "text": "انخفاض الشهية"},
-    {"key": "vomiting", "text": "تقيؤ"}, {"key": "heartburn", "text": "حرقة صدر"},
-    {"key": "gas", "text": "الغازات"}, {"key": "bloating", "text": "الانتفاخ"},
-    {"key": "hiccups", "text": "زغطة"}, {"key": "constipation", "text": "امساك"},
-    {"key": "diarrhea", "text": "اسهال"}, {"key": "fecal_incontinence", "text": "سلس برازي"},
-    {"key": "breath_shortness", "text": "ضيق تنفس"},
+    {"key": "abdominal_pain", "text": "ألم في البطن"},
+    {"key": "headache", "text": "صداع"},
+    {"key": "nausea", "text": "غثيان"},
+    {"key": "dry_mouth", "text": "جفاف الفم"},
+    {"key": "fever", "text": "حمى"},
+    {"key": "cough", "text": "سعال"},
+    {"key": "fatigue", "text": "إرهاق"},
+    {"key": "dizziness", "text": "دوخة"},
+    {"key": "bloating", "text": "انتفاخ"},
+    {"key": "vomiting", "text": "تقيؤ"}
 ]
 
+SYMPTOM_QUESTIONS = {
+    "headache": [
+        {
+            "question": "ما شدة الصداع في الأيام الماضية؟",
+            "options": ["لا يوجد", "خفيف", "متوسط", "شديد", "شديد جدًا"]
+        }
+    ],
+    "abdominal_pain": [
+        {
+            "question": "ما شدة ألم البطن؟",
+            "options": ["لا يوجد", "خفيف", "متوسط", "شديد", "شديد جدًا"]
+        }
+    ]
+}
+
+
+# ===============================
+# 3) Embedding model
+# ===============================
+model = SentenceTransformer("sentence-transformers/distiluse-base-multilingual-cased-v2")
 symptom_texts = [s["text"] for s in SYMPTOMS]
 symptom_embeddings = model.encode(symptom_texts)
 
-def detect_symptoms(text, threshold=0.19):
-    detected = set()
-    parts = re.split(r"[،,.\s!؟؛]+", text.lower())
+def detect_symptoms(text, threshold=0.25):
+    parts = text.split("و")
+    detected = []
+
+    def cosine(a, b):
+        return np.dot(a,b) / (np.linalg.norm(a)*np.linalg.norm(b))
+
     for part in parts:
-        part = part.strip()
-        if len(part) < 3: continue
-        user_emb = model.encode([part])[0]
-        similarities = [np.dot(user_emb, emb) / (np.linalg.norm(user_emb) * np.linalg.norm(emb)) 
-                       for emb in symptom_embeddings]
-        for idx, sim in enumerate(similarities):
-            if sim > threshold:
-                detected.add(SYMPTOMS[idx]["key"])
-    return list(detected)
+        emb = model.encode([part])[0]
+        sims = [cosine(emb, s) for s in symptom_embeddings]
+        idx = int(np.argmax(sims))
+        if sims[idx] >= threshold:
+            detected.append(SYMPTOMS[idx]["key"])
 
-def deepseek_chat(prompt):
-    payload = {
-        "model": "deepseek-v3.1",
-        "messages": [
-            {"role": "system", "content": "أنت طبيب أورام متخصص، جاوب بالعربي الفصحى وباختصار."},
-            {"role": "user", "content": prompt}
-        ],
-        "max_tokens": 600,
-        "temperature": 0.3
-    }
-    try:
-        r = requests.post(API_URL, headers=headers, json=payload, timeout=40)
-        return r.json()["choices"][0]["message"]["content"].strip() if r.status_code == 200 else "خطأ في الـ AI"
-    except:
-        return "مشكلة مؤقتة في الاتصال بالذكاء الاصطناعي"
+    return list(set(detected))
 
-class Input(BaseModel):
-    symptoms: str
-    patient_phone: str = ""
 
-@app.post("/api/analyze")
-async def analyze(data: Input):
-    text = data.symptoms.strip()
-    if not text:
-        return {"error": "الأعراض فارغة"}
-
-    detected = detect_symptoms(text)
-    
-    if not detected:
-        response = "لم أتعرف على أعراض واضحة، ممكن توضح أكتر؟"
-        risk = "منخفضة"
-    else:
-        symptoms_ar = "، ".join([s["text"] for s in SYMPTOMS if s["key"] in detected])
-        prompt = f"المريض يقول: {text}\nالأعراض المكتشفة: {symptoms_ar}\n\nجاوب بالعربي فقط:\n1. الاحتمالات الطبية\n2. درجة الخطورة (منخفضة/متوسطة/عالية/طوارئ)\n3. التوصية الفورية"
-        response = deepseek_chat(prompt)
-        risk = "طوارئ" if any(w in response for w in ["طوارئ","فورًا","مستشفى","نزيف"]) else \
-               "عالية" if any(w in response for w in ["عالية","خطير"]) else "متوسطة"
-
-    return {
-        "medical_response": response,
-        "detected_symptoms": detected,
-        "risk_level": risk,
-        "patient_phone": data.patient_phone
+# ===============================
+# 4) MAIN LOGIC ENTRYPOINT
+# ===============================
+def process_message(message):
+    """
+    الدالة اللي يستدعيها n8n
+    """
+    result = {
+        "detected_symptoms": [],
+        "questions": {},
+        "ai_advice": ""
     }
 
-# Vercel handler
-handler = Mangum(app, lifespan="off")
+    # 1) Detect symptoms
+    detected = detect_symptoms(message)
+    result["detected_symptoms"] = detected
+
+    # 2) Build follow-up questions
+    for s in detected:
+        if s in SYMPTOM_QUESTIONS:
+            result["questions"][s] = SYMPTOM_QUESTIONS[s]
+
+    # 3) If no symptoms → use AI directly
+    if len(detected) == 0:
+        result["ai_advice"] = deepseek(
+            f"المستخدم كتب: {message}\nاعطه إجابة طبية توعوية بسيطة."
+        )
+
+    return result
+
+
+# ===============================
+# Example
+# ===============================
+if __name__ == "__main__":
+    text = "حاسس بصداع جامد و شوية غثيان"
+    print(json.dumps(process_message(text), ensure_ascii=False, indent=2))
