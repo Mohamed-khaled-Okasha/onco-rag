@@ -11,16 +11,14 @@ from mangum import Mangum
 
 app = FastAPI(title="Onco-RAG API")
 
-# CORS كامل لـ n8n و Postman
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],  # يسمح POST صراحة
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# DeepSeek API
 API_URL = "https://api-ap-southeast-1.modelarts-maas.com/v1/chat/completions"
 API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
@@ -29,7 +27,6 @@ headers = {
     "Authorization": f"Bearer {API_KEY}",
 }
 
-# تحميل النموذج
 print("جاري تحميل نموذج الـ embeddings...")
 model = SentenceTransformer('sentence-transformers/distiluse-base-multilingual-cased-v2')
 
