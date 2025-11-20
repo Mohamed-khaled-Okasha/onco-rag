@@ -9,18 +9,18 @@ from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 from mangum import Mangum
 
-app = FastAPI(title="Oncology RAG API")
+app = FastAPI(title="Onco-RAG API")
 
-# CORS عشان n8n و Postman يشتغلوا من أي مكان
+# CORS كامل لـ n8n و Postman
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],  # يسمح POST صراحة
     allow_headers=["*"],
 )
 
-# DeepSeek Huawei Cloud
+# DeepSeek API
 API_URL = "https://api-ap-southeast-1.modelarts-maas.com/v1/chat/completions"
 API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
@@ -29,7 +29,7 @@ headers = {
     "Authorization": f"Bearer {API_KEY}",
 }
 
-# تحميل النموذج مرة واحدة
+# تحميل النموذج
 print("جاري تحميل نموذج الـ embeddings...")
 model = SentenceTransformer('sentence-transformers/distiluse-base-multilingual-cased-v2')
 
