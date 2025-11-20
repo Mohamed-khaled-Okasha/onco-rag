@@ -1,25 +1,8 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/*.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "50mb",
-        "runtime": "python3.12"
-      }
+  "functions": {
+    "api/*.py": {
+      "runtime": "vercel-python@0.6.2"
     }
-  ],
-  "routes": [
-    {
-      "src": "/api/analyze",
-      "methods": ["POST"],
-      "dest": "/api/analyze.py"
-    },
-    {
-      "src": "/api/analyze/",
-      "methods": ["POST"],
-      "dest": "/api/analyze.py"
-    }
-  ]
+  }
 }
