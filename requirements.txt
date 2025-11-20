@@ -1,8 +1,7 @@
-fastapi
-mangum
-sentence-transformers
-torch
-numpy
 requests
-pydantic
-python-multipart
+faiss-cpu
+tiktoken
+sentence-transformers
+fuzzywuzzy[speedup]
+python-Levenshtein
+flask
